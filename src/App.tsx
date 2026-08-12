@@ -1,13 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from "./App.module.css";
 
-const VERSION = "v1.0.1";
+const VERSION = "v1.1.0";
 const REPO_URL = "https://github.com/holynova/kaleidoscope-studio";
 const SOURCE_SIZE = 720;
 
 type Point = { x: number; y: number };
 type Selection = { x: number; y: number; size: number; angle: number };
 type Preset = { id: string; name: string; src: string };
+type LayoutMode = "mirror" | "radial" | "pinwheel" | "hex";
+
+const TRIANGLE_PRESETS = [
+  { angle: 30, label: "30° 等腰" },
+  { angle: 45, label: "45° 等腰" },
+  { angle: 60, label: "60° 正三角" },
+  { angle: 90, label: "90° 等腰" },
+] as const;
+
+const LAYOUT_MODES: Array<{ id: LayoutMode; label: string; note: string }> = [
+  { id: "mirror", label: "镜像方铺", note: "四向翻折，无缝连续" },
+  { id: "radial", label: "角度放射", note: "按步进旋转至 360°" },
+  { id: "pinwheel", label: "风车旋转", note: "同向旋转，形成涡流" },
+  { id: "hex", label: "六角错铺", note: "蜂巢交错，减少方格感" },
+];
+
+const ROTATION_STEPS = [10, 12, 15, 18, 20, 24, 30, 36, 40, 45, 60, 72, 90];
 
 function mulberry32(seed: number) {
   return () => {
@@ -67,13 +84,30 @@ function makePreset(id: string, name: string, seed: number, palette: string[]): 
   return { id, name, src: canvas.toDataURL("image/jpeg", 0.91) };
 }
 
-function trianglePoints(selection: Selection): [Point, Point, Point] {
-  const radius = selection.size * SOURCE_SIZE;
+function trianglePoints(selection: Selection, apexAngle: number): [Point, Point, Point] {
+  const height = selection.size * SOURCE_SIZE * 1.5;
+  const halfWidth = height * Math.tan((apexAngle * Math.PI) / 360);
   const center = { x: selection.x * SOURCE_SIZE, y: selection.y * SOURCE_SIZE };
-  return [0, 1, 2].map((index) => {
-    const angle = selection.angle + index * ((Math.PI * 2) / 3) - Math.PI / 2;
-    return { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius };
-  }) as [Point, Point, Point];
+  const local: [Point, Point, Point] = [
+    { x: 0, y: (-2 * height) / 3 },
+    { x: halfWidth, y: height / 3 },
+    { x: -halfWidth, y: height / 3 },
+  ];
+  const cosine = Math.cos(selection.angle);
+  const sine = Math.sin(selection.angle);
+  return local.map((point) => ({
+    x: center.x + point.x * cosine - point.y * sine,
+    y: center.y + point.x * sine + point.y * cosine,
+  })) as [Point, Point, Point];
+}
+
+function selectionMargins(selection: Selection, apexAngle: number) {
+  const centered = trianglePoints({ ...selection, x: 0.5, y: 0.5 }, apexAngle);
+  const center = SOURCE_SIZE / 2;
+  return {
+    x: Math.max(...centered.map((point) => Math.abs(point.x - center))) / SOURCE_SIZE,
+    y: Math.max(...centered.map((point) => Math.abs(point.y - center))) / SOURCE_SIZE,
+  };
 }
 
 function affineTransform(source: [Point, Point, Point], target: [Point, Point, Point]) {
@@ -107,7 +141,11 @@ function App() {
   );
   const [source, setSource] = useState(presets[0]);
   const [selection, setSelection] = useState<Selection>({ x: 0.53, y: 0.47, size: 0.2, angle: 0 });
+  const [apexAngle, setApexAngle] = useState(60);
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>("mirror");
   const [segments, setSegments] = useState(12);
+  const [spreadAngle, setSpreadAngle] = useState(30);
+  const [mirrorSlices, setMirrorSlices] = useState(true);
   const [tileSize, setTileSize] = useState(270);
   const [spinning, setSpinning] = useState(false);
   const [speed, setSpeed] = useState(0.055);
@@ -118,6 +156,15 @@ function App() {
   const wallCanvasRef = useRef<HTMLCanvasElement>(null);
   const wallRef = useRef<HTMLElement>(null);
   const uploadUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setSelection((current) => {
+      const margins = selectionMargins(current, apexAngle);
+      const x = Math.min(1 - margins.x, Math.max(margins.x, current.x));
+      const y = Math.min(1 - margins.y, Math.max(margins.y, current.y));
+      return x === current.x && y === current.y ? current : { ...current, x, y };
+    });
+  }, [apexAngle, selection.angle, selection.size]);
 
   useEffect(() => {
     const canvas = sourceCanvasRef.current!;
@@ -168,7 +215,7 @@ function App() {
         return;
       }
 
-      const points = trianglePoints(selection);
+      const points = trianglePoints(selection, apexAngle);
       const stampCtx = stampCanvas.getContext("2d")!;
       stampCtx.clearRect(0, 0, SOURCE_SIZE, SOURCE_SIZE);
       stampCtx.drawImage(sourceCanvas, 0, 0);
@@ -200,17 +247,21 @@ function App() {
 
       const density = Math.min(window.devicePixelRatio || 1, 1.6);
       const tilePixels = Math.max(100, Math.round(tileSize * density));
-      if (tile.width !== tilePixels || tile.height !== tilePixels) {
+      const patternWidth = tilePixels * 2;
+      const patternHeight = tilePixels * 2;
+      if (tile.width !== tilePixels || tile.height !== tilePixels || patternTile.width !== patternWidth || patternTile.height !== patternHeight) {
         tile.width = tilePixels;
         tile.height = tilePixels;
-        patternTile.width = tilePixels * 2;
-        patternTile.height = tilePixels * 2;
+        patternTile.width = patternWidth;
+        patternTile.height = patternHeight;
       }
       const tileCtx = tile.getContext("2d")!;
       tileCtx.clearRect(0, 0, tilePixels, tilePixels);
       const center = tilePixels / 2;
-      const radius = tilePixels * 0.74;
-      const wedge = (Math.PI * 2) / segments;
+      const radius = tilePixels * 0.92;
+      const radialCopies = Math.max(3, Math.round(360 / spreadAngle));
+      const activeSegments = layoutMode === "radial" || layoutMode === "pinwheel" ? radialCopies : layoutMode === "hex" ? 6 : segments;
+      const wedge = (Math.PI * 2) / activeSegments;
       const half = wedge / 2;
       const rotation = spinning && !reduceMotion ? (time / 1000) * speed : 0;
       const edgeA = { x: radius * Math.cos(-half), y: radius * Math.sin(-half) };
@@ -218,7 +269,7 @@ function App() {
 
       tileCtx.save();
       tileCtx.translate(center, center);
-      for (let index = 0; index < segments; index += 1) {
+      for (let index = 0; index < activeSegments; index += 1) {
         tileCtx.save();
         tileCtx.rotate(index * wedge + rotation);
         tileCtx.beginPath();
@@ -227,8 +278,10 @@ function App() {
         tileCtx.lineTo(edgeB.x, edgeB.y);
         tileCtx.closePath();
         tileCtx.clip();
-        const target: [Point, Point, Point] =
-          index % 2 === 0 ? [{ x: 0, y: 0 }, edgeA, edgeB] : [{ x: 0, y: 0 }, edgeB, edgeA];
+        const shouldMirror = layoutMode === "mirror" || layoutMode === "hex" || (layoutMode === "radial" && mirrorSlices);
+        const target: [Point, Point, Point] = shouldMirror && index % 2 === 1
+          ? [{ x: 0, y: 0 }, edgeB, edgeA]
+          : [{ x: 0, y: 0 }, edgeA, edgeB];
         const matrix = affineTransform(points, target);
         if (matrix) {
           tileCtx.transform(matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f);
@@ -240,22 +293,40 @@ function App() {
 
       const patternCtx = patternTile.getContext("2d")!;
       patternCtx.clearRect(0, 0, patternTile.width, patternTile.height);
-      patternCtx.drawImage(tile, 0, 0);
-      patternCtx.save();
-      patternCtx.translate(tilePixels * 2, 0);
-      patternCtx.scale(-1, 1);
-      patternCtx.drawImage(tile, 0, 0);
-      patternCtx.restore();
-      patternCtx.save();
-      patternCtx.translate(0, tilePixels * 2);
-      patternCtx.scale(1, -1);
-      patternCtx.drawImage(tile, 0, 0);
-      patternCtx.restore();
-      patternCtx.save();
-      patternCtx.translate(tilePixels * 2, tilePixels * 2);
-      patternCtx.scale(-1, -1);
-      patternCtx.drawImage(tile, 0, 0);
-      patternCtx.restore();
+      if (layoutMode === "mirror") {
+        patternCtx.drawImage(tile, 0, 0);
+        patternCtx.save();
+        patternCtx.translate(tilePixels * 2, 0);
+        patternCtx.scale(-1, 1);
+        patternCtx.drawImage(tile, 0, 0);
+        patternCtx.restore();
+        patternCtx.save();
+        patternCtx.translate(0, tilePixels * 2);
+        patternCtx.scale(1, -1);
+        patternCtx.drawImage(tile, 0, 0);
+        patternCtx.restore();
+        patternCtx.save();
+        patternCtx.translate(tilePixels * 2, tilePixels * 2);
+        patternCtx.scale(-1, -1);
+        patternCtx.drawImage(tile, 0, 0);
+        patternCtx.restore();
+      } else if (layoutMode === "hex") {
+        patternCtx.drawImage(tile, 0, 0);
+        patternCtx.drawImage(tile, tilePixels, 0);
+        patternCtx.drawImage(tile, -tilePixels / 2, tilePixels);
+        patternCtx.drawImage(tile, tilePixels / 2, tilePixels);
+        patternCtx.drawImage(tile, tilePixels * 1.5, tilePixels);
+      } else {
+        const rotations = layoutMode === "pinwheel" ? [0, Math.PI / 2, -Math.PI / 2, Math.PI] : [0, 0, 0, 0];
+        const positions = [[0, 0], [tilePixels, 0], [0, tilePixels], [tilePixels, tilePixels]];
+        positions.forEach(([x, y], index) => {
+          patternCtx.save();
+          patternCtx.translate(x + tilePixels / 2, y + tilePixels / 2);
+          patternCtx.rotate(rotations[index]);
+          patternCtx.drawImage(tile, -tilePixels / 2, -tilePixels / 2);
+          patternCtx.restore();
+        });
+      }
 
       const wallCtx = wallCanvas.getContext("2d")!;
       wallCtx.clearRect(0, 0, wallCanvas.width, wallCanvas.height);
@@ -281,7 +352,7 @@ function App() {
     };
     frame = requestAnimationFrame(render);
     return () => cancelAnimationFrame(frame);
-  }, [isDragging, segments, selection, sourceReady, speed, spinning, tileSize]);
+  }, [apexAngle, isDragging, layoutMode, mirrorSlices, segments, selection, sourceReady, speed, spinning, spreadAngle, tileSize]);
 
   useEffect(
     () => () => {
@@ -294,12 +365,12 @@ function App() {
     (clientX: number, clientY: number) => {
       const canvas = stampCanvasRef.current!;
       const rect = canvas.getBoundingClientRect();
-      const margin = selection.size * 0.66;
-      const x = Math.min(1 - margin, Math.max(margin, (clientX - rect.left) / rect.width));
-      const y = Math.min(1 - margin, Math.max(margin, (clientY - rect.top) / rect.height));
+      const margins = selectionMargins(selection, apexAngle);
+      const x = Math.min(1 - margins.x, Math.max(margins.x, (clientX - rect.left) / rect.width));
+      const y = Math.min(1 - margins.y, Math.max(margins.y, (clientY - rect.top) / rect.height));
       setSelection((current) => ({ ...current, x, y }));
     },
-    [selection.size],
+    [apexAngle, selection],
   );
 
   const handleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -329,6 +400,11 @@ function App() {
     link.click();
   };
 
+  const layoutLabel = LAYOUT_MODES.find((mode) => mode.id === layoutMode)?.label ?? "镜像方铺";
+  const effectiveSegments = layoutMode === "radial" || layoutMode === "pinwheel"
+    ? Math.max(3, Math.round(360 / spreadAngle))
+    : layoutMode === "hex" ? 6 : segments;
+
   return (
     <div className={styles.app}>
       <main className={styles.workspace}>
@@ -342,7 +418,7 @@ function App() {
             <span className={styles.liveBadge}><i /> LIVE</span>
           </div>
           <div className={styles.wallStatus} aria-live="polite">
-            <span>{segments} MIRRORS</span><span>{tileSize}px TILE</span><span>{spinning ? "MOTION ON" : "MOTION OFF"}</span>
+            <span>{apexAngle}° TRIANGLE</span><span>{effectiveSegments} SLICES</span><span>{layoutLabel}</span><span>{spinning ? "MOTION ON" : "MOTION OFF"}</span>
           </div>
           <p className={styles.wallHint}>拖动右侧三角章，整面图案会同步变化</p>
         </section>
@@ -387,11 +463,14 @@ function App() {
                   const move = moves[event.key];
                   if (!move) return;
                   event.preventDefault();
-                  setSelection((current) => ({
-                    ...current,
-                    x: Math.min(0.88, Math.max(0.12, current.x + move[0])),
-                    y: Math.min(0.88, Math.max(0.12, current.y + move[1])),
-                  }));
+                  setSelection((current) => {
+                    const margins = selectionMargins(current, apexAngle);
+                    return {
+                      ...current,
+                      x: Math.min(1 - margins.x, Math.max(margins.x, current.x + move[0])),
+                      y: Math.min(1 - margins.y, Math.max(margins.y, current.y + move[1])),
+                    };
+                  });
                 }}
               />
               <span>DRAG TO SAMPLE</span>
@@ -415,26 +494,80 @@ function App() {
           </section>
 
           <section className={styles.tuningSection} aria-labelledby="tuning-title">
-            <div className={styles.sectionTitle}><span>02</span><h2 id="tuning-title">调校图案</h2></div>
+            <div className={styles.sectionTitle}><span>02</span><h2 id="tuning-title">取样几何</h2></div>
             <div className={styles.controlGrid}>
+              <div className={`${styles.presetControl} ${styles.wideControl}`}>
+                <span><b>三角形预设</b><output>{apexAngle}°</output></span>
+                <div className={styles.presetRow}>
+                  {TRIANGLE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.angle}
+                      type="button"
+                      aria-pressed={apexAngle === preset.angle}
+                      className={apexAngle === preset.angle ? styles.activePreset : ""}
+                      onClick={() => setApexAngle(preset.angle)}
+                    >{preset.label}</button>
+                  ))}
+                </div>
+              </div>
+              <label className={`${styles.rangeControl} ${styles.wideControl}`}>
+                <span><b>顶角微调</b><output>{apexAngle}°</output></span>
+                <input type="range" min="20" max="100" step="1" value={apexAngle} onChange={(event) => setApexAngle(Number(event.target.value))} />
+              </label>
               <label className={styles.rangeControl}>
                 <span><b>三角章大小</b><output>{Math.round(selection.size * 100)}</output></span>
-                <input type="range" min="10" max="30" value={Math.round(selection.size * 100)} onChange={(event) => setSelection((current) => ({ ...current, size: Number(event.target.value) / 100 }))} />
+                <input type="range" min="8" max="26" value={Math.round(selection.size * 100)} onChange={(event) => setSelection((current) => ({ ...current, size: Number(event.target.value) / 100 }))} />
               </label>
               <label className={styles.rangeControl}>
                 <span><b>取样角度</b><output>{Math.round((selection.angle * 180) / Math.PI)}°</output></span>
                 <input type="range" min="0" max="359" value={Math.round((selection.angle * 180) / Math.PI) % 360} onChange={(event) => setSelection((current) => ({ ...current, angle: (Number(event.target.value) * Math.PI) / 180 }))} />
               </label>
+            </div>
+          </section>
+
+          <section className={styles.transformSection} aria-labelledby="transform-title">
+            <div className={styles.sectionTitle}><span>03</span><h2 id="transform-title">展开与平铺</h2></div>
+            <div className={styles.methodGrid}>
+              {LAYOUT_MODES.map((mode) => (
+                <button
+                  key={mode.id}
+                  type="button"
+                  aria-pressed={layoutMode === mode.id}
+                  className={layoutMode === mode.id ? styles.activeMethod : ""}
+                  onClick={() => setLayoutMode(mode.id)}
+                ><b>{mode.label}</b><small>{mode.note}</small></button>
+              ))}
+            </div>
+            <div className={styles.controlGrid}>
               <label className={`${styles.rangeControl} ${styles.wideControl}`}>
                 <span><b>平铺尺寸</b><output>{tileSize}px</output></span>
                 <input type="range" min="140" max="460" step="10" value={tileSize} onChange={(event) => setTileSize(Number(event.target.value))} />
               </label>
-              <div className={`${styles.segmentControl} ${styles.wideControl}`}>
-                <span><b>镜面数量</b><output>{segments}</output></span>
-                <div>{[6, 8, 12, 16].map((count) => (
-                  <button key={count} type="button" className={segments === count ? styles.activeSegment : ""} onClick={() => setSegments(count)}>{count}</button>
-                ))}</div>
-              </div>
+              {layoutMode === "mirror" && (
+                <div className={`${styles.segmentControl} ${styles.wideControl}`}>
+                  <span><b>镜面数量</b><output>{segments}</output></span>
+                  <div>{[6, 8, 12, 16].map((count) => (
+                    <button key={count} type="button" className={segments === count ? styles.activeSegment : ""} onClick={() => setSegments(count)}>{count}</button>
+                  ))}</div>
+                </div>
+              )}
+              {(layoutMode === "radial" || layoutMode === "pinwheel") && (
+                <label className={`${styles.selectControl} ${styles.wideControl}`}>
+                  <span><b>旋转步进</b><output>{spreadAngle}° × {effectiveSegments}</output></span>
+                  <select value={spreadAngle} onChange={(event) => setSpreadAngle(Number(event.target.value))}>
+                    {ROTATION_STEPS.map((angle) => <option key={angle} value={angle}>{angle}°，{360 / angle} 片闭合 360°</option>)}
+                  </select>
+                </label>
+              )}
+              {layoutMode === "radial" && (
+                <button
+                  type="button"
+                  className={`${styles.toggleButton} ${mirrorSlices ? styles.activeToggle : ""}`}
+                  aria-pressed={mirrorSlices}
+                  onClick={() => setMirrorSlices((current) => !current)}
+                ><span>交替镜像</span><b>{mirrorSlices ? "开启" : "关闭"}</b></button>
+              )}
+              {layoutMode === "hex" && <p className={styles.modeNote}>六轴镜像后以蜂巢节奏错位排列，适合形成连续花砖。</p>}
               <label className={`${styles.rangeControl} ${styles.wideControl}`}>
                 <span><b>旋转速度</b><output>{speed.toFixed(2)}</output></span>
                 <input type="range" min="0" max="20" value={Math.round(speed * 100)} onChange={(event) => setSpeed(Number(event.target.value) / 100)} />

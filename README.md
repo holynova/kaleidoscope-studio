@@ -1,8 +1,8 @@
 # 镜花万象 / Kaleidoscope Studio
 
-中文：在右侧图片上移动三角取样章，左侧整面万花筒墙会实时重组并无缝平铺。支持本地上传与 PNG 导出。
+中文：移动不同角度的三角取样章，实时生成镜像方铺、360° 放射、风车与六角错铺图案。支持本地上传和 PNG 导出。
 
-English: Move a triangular sample and watch a full tiled kaleidoscope wall rebuild live. Local uploads and PNG export included.
+English: Move adjustable triangular samples to generate mirrored, radial, pinwheel, and hexagonal kaleidoscope patterns live.
 
 ![项目截图 / Project screenshot](./assets/screenshot.png)
 

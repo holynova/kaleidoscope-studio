@@ -1,7 +1,13 @@
 {
   "name": "kaleidoscope-studio",
+  "description": "可拖动三角取样并实时生成多种平铺万花筒图案的纯网页应用",
+  "homepage": "https://holynova.github.io/kaleidoscope-studio/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/holynova/kaleidoscope-studio.git"
+  },
   "private": true,
-  "version": "1.0.1",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",

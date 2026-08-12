@@ -1,8 +1,8 @@
 # 镜花万象 / Kaleidoscope Studio
 
-中文：在图片上移动三角取样章，实时生成可旋转、可调镜面数量的电子万花筒。支持本地上传与 PNG 导出。
+中文：在右侧图片上移动三角取样章，左侧整面万花筒墙会实时重组并无缝平铺。支持本地上传与 PNG 导出。
 
-English: Stamp a triangular sample onto any image and turn it into a live, rotating kaleidoscope. Local uploads and PNG export included.
+English: Move a triangular sample and watch a full tiled kaleidoscope wall rebuild live. Local uploads and PNG export included.
 
 ![项目截图 / Project screenshot](./assets/screenshot.png)
 

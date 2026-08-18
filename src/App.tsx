@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from "./App.module.css";
 
-const VERSION = "v1.1.0";
+const VERSION = "v1.2.0";
 const REPO_URL = "https://github.com/holynova/kaleidoscope-studio";
 const SOURCE_SIZE = 720;
 
@@ -18,13 +18,47 @@ const TRIANGLE_PRESETS = [
 ] as const;
 
 const LAYOUT_MODES: Array<{ id: LayoutMode; label: string; note: string }> = [
-  { id: "mirror", label: "镜像方铺", note: "四向翻折，无缝连续" },
-  { id: "radial", label: "角度放射", note: "按步进旋转至 360°" },
-  { id: "pinwheel", label: "风车旋转", note: "同向旋转，形成涡流" },
-  { id: "hex", label: "六角错铺", note: "蜂巢交错，减少方格感" },
+  { id: "mirror", label: "镜像方铺", note: "像花砖一样，上下左右翻面拼接" },
+  { id: "radial", label: "角度放射", note: "像切披萨一样，围着中心转满一圈" },
+  { id: "pinwheel", label: "风车旋转", note: "每一块朝同一方向转，像风车叶片" },
+  { id: "hex", label: "六角错铺", note: "像蜂窝地砖一样，一排一排错开铺" },
 ];
 
-const ROTATION_STEPS = [10, 12, 15, 18, 20, 24, 30, 36, 40, 45, 60, 72, 90];
+const ROTATION_STEPS = [10, 12, 15, 18, 20, 24, 30, 36, 40, 45, 60, 72, 90, 120];
+
+function LayoutDiagram({ mode }: { mode: LayoutMode }) {
+  if (mode === "mirror") {
+    return (
+      <svg viewBox="0 0 48 32" aria-hidden="true">
+        <path d="M4 3h19v12H4zM25 3h19v12H25zM4 17h19v12H4zM25 17h19v12H25z" className="frame" />
+        <path d="m7 13 8-8 5 8m21 0-8-8-5 8M7 19l8 8 5-8m21 0-8 8-5-8" />
+      </svg>
+    );
+  }
+  if (mode === "radial") {
+    return (
+      <svg viewBox="0 0 48 32" aria-hidden="true">
+        <circle cx="24" cy="16" r="13" className="frame" />
+        <path d="M24 16V3m0 13 9-9m-9 9h13m-13 0 9 9m-9-9v13m0-13-9 9m9-9H11m13 0-9-9" />
+        <circle cx="24" cy="16" r="2" />
+      </svg>
+    );
+  }
+  if (mode === "pinwheel") {
+    return (
+      <svg viewBox="0 0 48 32" aria-hidden="true">
+        <circle cx="24" cy="16" r="2" />
+        <path d="M24 14 17 3c7 0 12 4 9 11m0 2 11-7c0 7-4 12-11 9m-2 0 7 11c-7 0-12-4-9-11m0-2-11 7c0-7 4-12 11-9" />
+        <path d="M24 3v4m13 9h-4m-9 13v-4m-13-9h4" className="frame" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 48 32" aria-hidden="true">
+      <path d="m16 3 6 3.5v7L16 17l-6-3.5v-7Zm16 0 6 3.5v7L32 17l-6-3.5v-7ZM8 17l6 3.5v7L8 31l-6-3.5v-7Zm16 0 6 3.5v7L24 31l-6-3.5v-7Zm16 0 6 3.5v7L40 31l-6-3.5v-7Z" />
+    </svg>
+  );
+}
 
 function mulberry32(seed: number) {
   return () => {
@@ -110,6 +144,18 @@ function selectionMargins(selection: Selection, apexAngle: number) {
   };
 }
 
+function maximumSelectionSize(apexAngle: number, angle: number) {
+  let minimum = 0.05;
+  let maximum = 0.4;
+  for (let iteration = 0; iteration < 12; iteration += 1) {
+    const candidate = (minimum + maximum) / 2;
+    const margins = selectionMargins({ x: 0.5, y: 0.5, size: candidate, angle }, apexAngle);
+    if (margins.x <= 0.48 && margins.y <= 0.48) minimum = candidate;
+    else maximum = candidate;
+  }
+  return Math.floor(minimum * 100);
+}
+
 function affineTransform(source: [Point, Point, Point], target: [Point, Point, Point]) {
   const [s0, s1, s2] = source;
   const [t0, t1, t2] = target;
@@ -149,6 +195,7 @@ function App() {
   const [tileSize, setTileSize] = useState(270);
   const [spinning, setSpinning] = useState(false);
   const [speed, setSpeed] = useState(0.055);
+  const [wallRevision, setWallRevision] = useState(0);
   const [sourceReady, setSourceReady] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const sourceCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -156,15 +203,20 @@ function App() {
   const wallCanvasRef = useRef<HTMLCanvasElement>(null);
   const wallRef = useRef<HTMLElement>(null);
   const uploadUrlRef = useRef<string | null>(null);
+  const maximumStampSize = useMemo(
+    () => maximumSelectionSize(apexAngle, selection.angle),
+    [apexAngle, selection.angle],
+  );
 
   useEffect(() => {
     setSelection((current) => {
-      const margins = selectionMargins(current, apexAngle);
+      const size = Math.min(current.size, maximumStampSize / 100);
+      const margins = selectionMargins({ ...current, size }, apexAngle);
       const x = Math.min(1 - margins.x, Math.max(margins.x, current.x));
       const y = Math.min(1 - margins.y, Math.max(margins.y, current.y));
-      return x === current.x && y === current.y ? current : { ...current, x, y };
+      return x === current.x && y === current.y && size === current.size ? current : { ...current, x, y, size };
     });
-  }, [apexAngle, selection.angle, selection.size]);
+  }, [apexAngle, maximumStampSize, selection.angle, selection.size]);
 
   useEffect(() => {
     const canvas = sourceCanvasRef.current!;
@@ -191,8 +243,12 @@ function App() {
     const resize = () => {
       const rect = wall.getBoundingClientRect();
       const density = Math.min(window.devicePixelRatio || 1, 1.6);
-      canvas.width = Math.max(1, Math.round(rect.width * density));
-      canvas.height = Math.max(1, Math.round(rect.height * density));
+      const width = Math.max(1, Math.round(rect.width * density));
+      const height = Math.max(1, Math.round(rect.height * density));
+      if (canvas.width === width && canvas.height === height) return;
+      canvas.width = width;
+      canvas.height = height;
+      setWallRevision((current) => current + 1);
     };
     resize();
     const observer = new ResizeObserver(resize);
@@ -202,11 +258,17 @@ function App() {
 
   useEffect(() => {
     let frame = 0;
+    let lastAnimatedFrame = 0;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const tile = document.createElement("canvas");
     const patternTile = document.createElement("canvas");
 
     const render = (time: number) => {
+      if (spinning && !reduceMotion && time - lastAnimatedFrame < 1000 / 30) {
+        frame = requestAnimationFrame(render);
+        return;
+      }
+      lastAnimatedFrame = time;
       const sourceCanvas = sourceCanvasRef.current;
       const stampCanvas = stampCanvasRef.current;
       const wallCanvas = wallCanvasRef.current;
@@ -352,7 +414,7 @@ function App() {
     };
     frame = requestAnimationFrame(render);
     return () => cancelAnimationFrame(frame);
-  }, [apexAngle, isDragging, layoutMode, mirrorSlices, segments, selection, sourceReady, speed, spinning, spreadAngle, tileSize]);
+  }, [apexAngle, isDragging, layoutMode, mirrorSlices, segments, selection, sourceReady, speed, spinning, spreadAngle, tileSize, wallRevision]);
 
   useEffect(
     () => () => {
@@ -401,6 +463,7 @@ function App() {
   };
 
   const layoutLabel = LAYOUT_MODES.find((mode) => mode.id === layoutMode)?.label ?? "镜像方铺";
+  const layoutNote = LAYOUT_MODES.find((mode) => mode.id === layoutMode)?.note ?? "像花砖一样，上下左右翻面拼接";
   const effectiveSegments = layoutMode === "radial" || layoutMode === "pinwheel"
     ? Math.max(3, Math.round(360 / spreadAngle))
     : layoutMode === "hex" ? 6 : segments;
@@ -425,14 +488,16 @@ function App() {
 
         <aside className={styles.panel} aria-label="万花筒控制台">
           <header className={styles.panelHeader}>
-            <div><span>CONTROL PANEL</span><h1>取样与平铺</h1></div>
+            <div><h1>取样与平铺</h1><p>移动取样，实时塑造整面图案</p></div>
             <div className={styles.panelMeta}><a href={REPO_URL} target="_blank" rel="noreferrer">GitHub</a><span>{VERSION}</span></div>
           </header>
 
           <section className={styles.sampleSection} aria-labelledby="sample-title">
             <div className={styles.sectionTitle}>
-              <span>01</span><h2 id="sample-title">移动三角章</h2><button type="button" onClick={randomize}>随机落点 ↗</button>
+              <div><h2 id="sample-title">取样图像</h2><p>拖动三角章改变图案核心</p></div>
+              <button type="button" onClick={randomize}>随机位置</button>
             </div>
+            <div className={styles.sampleWorkspace}>
             <div className={styles.sourceStage}>
               <canvas
                 ref={stampCanvasRef}
@@ -473,8 +538,9 @@ function App() {
                   });
                 }}
               />
-              <span>DRAG TO SAMPLE</span>
+              <span>拖动取样</span>
             </div>
+            <div className={styles.sourceLibrary}>
             <div className={styles.sourceStrip} aria-label="选择图片">
               {presets.map((preset) => (
                 <button
@@ -486,17 +552,20 @@ function App() {
                   title={preset.name}
                 ><img src={preset.src} width="54" height="54" alt="" /></button>
               ))}
-              <label className={styles.uploadButton} title="上传自己的图片">
-                <input type="file" accept="image/*" onChange={handleUpload} />
-                <b>＋</b><span>上传</span>
-              </label>
+            </div>
+            <label className={styles.uploadButton} title="上传自己的图片">
+              <input type="file" accept="image/*" onChange={handleUpload} />
+              <span>上传自己的图片</span>
+            </label>
+            <small>当前：{source.name}</small>
+            </div>
             </div>
           </section>
 
           <section className={styles.tuningSection} aria-labelledby="tuning-title">
-            <div className={styles.sectionTitle}><span>02</span><h2 id="tuning-title">取样几何</h2></div>
-            <div className={styles.controlGrid}>
-              <div className={`${styles.presetControl} ${styles.wideControl}`}>
+            <div className={styles.sectionTitle}><div><h2 id="tuning-title">三角几何</h2><p>先选形态，再做细调</p></div></div>
+            <div className={styles.geometryGrid}>
+              <div className={styles.presetControl}>
                 <span><b>三角形预设</b><output>{apexAngle}°</output></span>
                 <div className={styles.presetRow}>
                   {TRIANGLE_PRESETS.map((preset) => (
@@ -510,23 +579,23 @@ function App() {
                   ))}
                 </div>
               </div>
-              <label className={`${styles.rangeControl} ${styles.wideControl}`}>
+              <label className={styles.rangeControl}>
                 <span><b>顶角微调</b><output>{apexAngle}°</output></span>
-                <input type="range" min="20" max="100" step="1" value={apexAngle} onChange={(event) => setApexAngle(Number(event.target.value))} />
+                <input type="range" min="10" max="120" step="1" value={apexAngle} onChange={(event) => setApexAngle(Number(event.target.value))} />
               </label>
               <label className={styles.rangeControl}>
-                <span><b>三角章大小</b><output>{Math.round(selection.size * 100)}</output></span>
-                <input type="range" min="8" max="26" value={Math.round(selection.size * 100)} onChange={(event) => setSelection((current) => ({ ...current, size: Number(event.target.value) / 100 }))} />
+                <span><b>尺寸</b><output>{Math.round(selection.size * 100)}%</output></span>
+                <input type="range" min="5" max={maximumStampSize} value={Math.round(selection.size * 100)} onChange={(event) => setSelection((current) => ({ ...current, size: Number(event.target.value) / 100 }))} />
               </label>
               <label className={styles.rangeControl}>
-                <span><b>取样角度</b><output>{Math.round((selection.angle * 180) / Math.PI)}°</output></span>
+                <span><b>方向</b><output>{Math.round((selection.angle * 180) / Math.PI)}°</output></span>
                 <input type="range" min="0" max="359" value={Math.round((selection.angle * 180) / Math.PI) % 360} onChange={(event) => setSelection((current) => ({ ...current, angle: (Number(event.target.value) * Math.PI) / 180 }))} />
               </label>
             </div>
           </section>
 
           <section className={styles.transformSection} aria-labelledby="transform-title">
-            <div className={styles.sectionTitle}><span>03</span><h2 id="transform-title">展开与平铺</h2></div>
+            <div className={styles.sectionTitle}><div><h2 id="transform-title">图案怎么铺开？</h2><p>同一块三角形，可以用四种方式复制</p></div></div>
             <div className={styles.methodGrid}>
               {LAYOUT_MODES.map((mode) => (
                 <button
@@ -535,27 +604,31 @@ function App() {
                   aria-pressed={layoutMode === mode.id}
                   className={layoutMode === mode.id ? styles.activeMethod : ""}
                   onClick={() => setLayoutMode(mode.id)}
-                ><b>{mode.label}</b><small>{mode.note}</small></button>
+                  title={mode.note}
+                ><LayoutDiagram mode={mode.id} /><b>{mode.label}</b></button>
               ))}
             </div>
-            <div className={styles.controlGrid}>
-              <label className={`${styles.rangeControl} ${styles.wideControl}`}>
+            <p className={styles.activeMethodNote}><b>{layoutLabel}：</b>{layoutNote}</p>
+            <div className={styles.transformControls}>
+              <label className={styles.rangeControl}>
                 <span><b>平铺尺寸</b><output>{tileSize}px</output></span>
-                <input type="range" min="140" max="460" step="10" value={tileSize} onChange={(event) => setTileSize(Number(event.target.value))} />
+                <input type="range" min="80" max="720" step="10" value={tileSize} onChange={(event) => setTileSize(Number(event.target.value))} />
+              </label>
+              <label className={styles.rangeControl}>
+                <span><b>旋转速度</b><output>{speed.toFixed(2)}×</output></span>
+                <input type="range" min="0" max="200" step="1" value={Math.round(speed * 100)} onChange={(event) => setSpeed(Number(event.target.value) / 100)} />
               </label>
               {layoutMode === "mirror" && (
-                <div className={`${styles.segmentControl} ${styles.wideControl}`}>
+                <label className={`${styles.rangeControl} ${styles.wideControl}`}>
                   <span><b>镜面数量</b><output>{segments}</output></span>
-                  <div>{[6, 8, 12, 16].map((count) => (
-                    <button key={count} type="button" className={segments === count ? styles.activeSegment : ""} onClick={() => setSegments(count)}>{count}</button>
-                  ))}</div>
-                </div>
+                  <input type="range" min="4" max="24" step="2" value={segments} onChange={(event) => setSegments(Number(event.target.value))} />
+                </label>
               )}
               {(layoutMode === "radial" || layoutMode === "pinwheel") && (
                 <label className={`${styles.selectControl} ${styles.wideControl}`}>
-                  <span><b>旋转步进</b><output>{spreadAngle}° × {effectiveSegments}</output></span>
+                  <span><b>每次转多少度</b><output>{spreadAngle}° × {effectiveSegments} 块</output></span>
                   <select value={spreadAngle} onChange={(event) => setSpreadAngle(Number(event.target.value))}>
-                    {ROTATION_STEPS.map((angle) => <option key={angle} value={angle}>{angle}°，{360 / angle} 片闭合 360°</option>)}
+                    {ROTATION_STEPS.map((angle) => <option key={angle} value={angle}>每次转 {angle}°，用 {360 / angle} 块拼成一圈</option>)}
                   </select>
                 </label>
               )}
@@ -565,19 +638,17 @@ function App() {
                   className={`${styles.toggleButton} ${mirrorSlices ? styles.activeToggle : ""}`}
                   aria-pressed={mirrorSlices}
                   onClick={() => setMirrorSlices((current) => !current)}
-                ><span>交替镜像</span><b>{mirrorSlices ? "开启" : "关闭"}</b></button>
+                ><span>相邻两块要不要翻面</span><b>{mirrorSlices ? "翻面" : "不翻"}</b></button>
               )}
-              {layoutMode === "hex" && <p className={styles.modeNote}>六轴镜像后以蜂巢节奏错位排列，适合形成连续花砖。</p>}
-              <label className={`${styles.rangeControl} ${styles.wideControl}`}>
-                <span><b>旋转速度</b><output>{speed.toFixed(2)}</output></span>
-                <input type="range" min="0" max="20" value={Math.round(speed * 100)} onChange={(event) => setSpeed(Number(event.target.value) / 100)} />
-              </label>
             </div>
           </section>
 
           <footer className={styles.actions}>
-            <button type="button" className={styles.motionButton} onClick={() => setSpinning((current) => !current)}><span>{spinning ? "Ⅱ" : "▶"}</span>{spinning ? "暂停流动" : "继续流动"}</button>
-            <button type="button" className={styles.exportButton} onClick={exportWall}>保存平铺画面 <span>↓</span></button>
+            <button type="button" className={styles.motionButton} onClick={() => setSpinning((current) => !current)}>
+              <svg viewBox="0 0 20 20" aria-hidden="true">{spinning ? <path d="M7 5v10M13 5v10" /> : <path d="m7 5 8 5-8 5Z" />}</svg>
+              {spinning ? "暂停流动" : "开始流动"}
+            </button>
+            <button type="button" className={styles.exportButton} onClick={exportWall}>保存画面 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m-4-4 4 4 4-4M4 16h12" /></svg></button>
             <p>图片只在当前浏览器中处理，不会上传。</p>
           </footer>
         </aside>

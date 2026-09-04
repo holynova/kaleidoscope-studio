@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit -p tsconfig.app.json && vite build",
+    "build:pages": "tsc --noEmit -p tsconfig.app.json && VITE_PAGES=true vite build --mode pages && touch docs/.nojekyll",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {

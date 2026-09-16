@@ -2,6 +2,11 @@
 
 中文：移动不同角度的三角取样章，实时生成镜像方铺、360° 放射、风车与六角错铺图案。支持本地上传和 PNG 导出。
 
+<p align="center">
+  <img src="assets/readme/hero.svg" width="100%" alt="镜花万象 / Kaleidoscope Studio: 中文：移动不同角度的三角取样章，实时生成镜像方铺、360° 放射、风车与六角错铺图案。支持本地上传和 PNG 导出。">
+</p>
+
+
 English: Move adjustable triangular samples to generate mirrored, radial, pinwheel, and hexagonal kaleidoscope patterns live.
 
 ![项目截图 / Project screenshot](./assets/screenshot.png)

@@ -197,6 +197,7 @@ function App() {
   const [speed, setSpeed] = useState(0.055);
   const [wallRevision, setWallRevision] = useState(0);
   const [sourceReady, setSourceReady] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const sourceCanvasRef = useRef<HTMLCanvasElement>(null);
   const stampCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -437,7 +438,13 @@ function App() {
 
   const handleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) return;
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setUploadError("请选择图片文件");
+      event.target.value = "";
+      return;
+    }
+    setUploadError("");
     if (uploadUrlRef.current) URL.revokeObjectURL(uploadUrlRef.current);
     uploadUrlRef.current = URL.createObjectURL(file);
     setSource({ id: "upload", name: file.name.replace(/\.[^.]+$/, ""), src: uploadUrlRef.current });
@@ -478,12 +485,12 @@ function App() {
               <span className={styles.brandMark} aria-hidden="true"><i /></span>
               <span><strong id="wall-title">镜花万象</strong><small>KALEIDOSCOPE STUDIO</small></span>
             </div>
-            <span className={styles.liveBadge}><i /> LIVE</span>
+            <span className={styles.liveBadge}><i /> 实时</span>
           </div>
           <div className={styles.wallStatus} aria-live="polite">
-            <span>{apexAngle}° TRIANGLE</span><span>{effectiveSegments} SLICES</span><span>{layoutLabel}</span><span>{spinning ? "MOTION ON" : "MOTION OFF"}</span>
+            <span>{apexAngle}° 三角</span><span>{effectiveSegments} 瓣</span><span>{layoutLabel}</span><span>{spinning ? "流动中" : "已暂停"}</span>
           </div>
-          <p className={styles.wallHint}>拖动右侧三角章，整面图案会同步变化</p>
+          <p className={styles.wallHint}>拖动取样区的三角章，整面图案会同步变化</p>
         </section>
 
         <aside className={styles.panel} aria-label="万花筒控制台">
@@ -557,6 +564,7 @@ function App() {
               <input type="file" accept="image/*" onChange={handleUpload} />
               <span>上传自己的图片</span>
             </label>
+            {uploadError && <small className={styles.uploadError} role="alert">{uploadError}</small>}
             <small>当前：{source.name}</small>
             </div>
             </div>
@@ -615,7 +623,7 @@ function App() {
                 <input type="range" min="80" max="720" step="10" value={tileSize} onChange={(event) => setTileSize(Number(event.target.value))} />
               </label>
               <label className={styles.rangeControl}>
-                <span><b>旋转速度</b><output>{speed.toFixed(2)}×</output></span>
+                <span><b>旋转速度</b><output>{Math.round(speed * 57.3)}°/秒</output></span>
                 <input type="range" min="0" max="200" step="1" value={Math.round(speed * 100)} onChange={(event) => setSpeed(Number(event.target.value) / 100)} />
               </label>
               {layoutMode === "mirror" && (

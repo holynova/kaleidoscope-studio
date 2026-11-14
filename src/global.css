@@ -25,6 +25,7 @@ body {
   min-height: 100vh;
   margin: 0;
   overscroll-behavior: none;
+  font-size: 13px;
 }
 
 button,

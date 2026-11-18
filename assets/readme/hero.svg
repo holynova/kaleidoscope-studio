@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="360" viewBox="0 0 1200 360"
+     role="img" aria-labelledby="title desc">
+  <title id="title">镜花万象 Kaleidoscope Studio — 电子万花筒</title>
+  <desc id="desc">深黑底标题：镜花万象，副标题拖动三角章，图案实时万变；右侧是一个十二瓣万花筒花纹，由粉色与金色三角瓣旋转组成。</desc>
+
+  <rect width="1200" height="360" rx="26" fill="#0c0d0c"/>
+
+  <defs>
+    <g id="wedge-pink">
+      <path d="M960 180 L922 58 L998 58 Z" fill="#f472b6" opacity="0.88"/>
+    </g>
+    <g id="wedge-gold">
+      <path d="M960 180 L922 58 L998 58 Z" fill="#fbbf24" opacity="0.88"/>
+    </g>
+    <g id="wedge-inner">
+      <path d="M960 180 L940 108 L980 108 Z" fill="#fef08a" opacity="0.95"/>
+    </g>
+  </defs>
+
+  <g id="title-block" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif">
+    <text x="56" y="62" font-size="19" letter-spacing="3" fill="#d4a24e">电子万花筒 · KALEIDOSCOPE STUDIO</text>
+    <text x="56" y="128" font-size="62" font-weight="700" fill="#fafaf9">镜花万象</text>
+    <text x="56" y="168" font-size="23" fill="#e7e5e4">KALEIDOSCOPE STUDIO — 拖动三角章，图案实时万变</text>
+    <text x="56" y="204" font-size="19" fill="#a8a29e">镜像方铺、360° 放射、风车与六角错铺，四种图案一拖即变。</text>
+    <g id="chips" font-size="18" fill="#e7e5e4" text-anchor="middle">
+      <g><rect x="56" y="238" width="126" height="36" rx="18" fill="#1c1917" stroke="#44403c" stroke-width="1.5"/><text x="119" y="262">4 种平铺图案</text></g>
+      <g><rect x="194" y="238" width="200" height="36" rx="18" fill="#1c1917" stroke="#44403c" stroke-width="1.5"/><text x="294" y="262">三角取样 · 实时生成</text></g>
+      <g><rect x="406" y="238" width="126" height="36" rx="18" fill="#1c1917" stroke="#44403c" stroke-width="1.5"/><text x="469" y="262">本地上传图片</text></g>
+      <g><rect x="544" y="238" width="108" height="36" rx="18" fill="#1c1917" stroke="#44403c" stroke-width="1.5"/><text x="598" y="262">PNG 导出</text></g>
+    </g>
+  </g>
+
+  <g id="rosette">
+    <use href="#wedge-pink" transform="rotate(0 960 180)"/>
+    <use href="#wedge-gold" transform="rotate(30 960 180)"/>
+    <use href="#wedge-pink" transform="rotate(60 960 180)"/>
+    <use href="#wedge-gold" transform="rotate(90 960 180)"/>
+    <use href="#wedge-pink" transform="rotate(120 960 180)"/>
+    <use href="#wedge-gold" transform="rotate(150 960 180)"/>
+    <use href="#wedge-pink" transform="rotate(180 960 180)"/>
+    <use href="#wedge-gold" transform="rotate(210 960 180)"/>
+    <use href="#wedge-pink" transform="rotate(240 960 180)"/>
+    <use href="#wedge-gold" transform="rotate(270 960 180)"/>
+    <use href="#wedge-pink" transform="rotate(300 960 180)"/>
+    <use href="#wedge-gold" transform="rotate(330 960 180)"/>
+    <use href="#wedge-inner" transform="rotate(0 960 180)"/>
+    <use href="#wedge-inner" transform="rotate(60 960 180)"/>
+    <use href="#wedge-inner" transform="rotate(120 960 180)"/>
+    <use href="#wedge-inner" transform="rotate(180 960 180)"/>
+    <use href="#wedge-inner" transform="rotate(240 960 180)"/>
+    <use href="#wedge-inner" transform="rotate(300 960 180)"/>
+    <circle cx="960" cy="180" r="20" fill="#fef9c3"/>
+    <circle cx="960" cy="180" r="9" fill="#f472b6"/>
+  </g>
+
+  <g id="rosette-caption" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif">
+    <text x="960" y="336" font-size="18" fill="#a8a29e" text-anchor="middle">60° 正三角 · 12 镜面 · 镜像方铺</text>
+  </g>
+</svg>
